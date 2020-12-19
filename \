@@ -1,0 +1,118 @@
+import sys
+import re
+import numpy
+import math
+import os
+
+def calcco(window, vocab, comatrix, text):
+
+	words = text.split()
+
+	for word, i in zip(words, range(len(words)-window)):
+		for j in range(window - 1):
+			comatrix[vocab[words[i]][0]][vocab[words[i+j+1]][0]] += 1
+
+def cosine(vocab, comatrix, pair):
+
+	words = pair.split()
+
+	count = 0
+	numerator = 0
+	sum1 = 0
+	sum2 = 0
+	denominator = 0
+
+	if words[0] in vocab.keys() and words[1] in vocab.keys():
+
+		for first, second in zip( comatrix[ vocab[ words[0] ][0] ] , comatrix[ vocab[ words[1] ][0]] ):
+
+			numerator += first*second
+
+			sum1 += first*first
+			sum2 += second*second
+
+		denominator = math.sqrt(sum1)*math.sqrt(sum2)
+
+		if denominator == 0:
+			return 0
+
+	else:
+		return -9999
+
+	return numerator/denominator
+
+def pmi(vocab, comatrix, pair, totalWords):
+
+	words = pair.split()
+
+	if words[0] in vocab.keys() and words[1] in vocab.keys():
+		p1 = vocab[words[0]][1]/totalWords
+		p2 = vocab[words[1]][1]/totalWords
+		p12 = comatrix[vocab[words[0]][0]][vocab[words[1]][0]]/totalWords
+
+		if p12 == 0:
+			return 0
+
+	else:
+		return 0
+
+	return math.log2(p12/(p1*p2))
+
+def main(argv):
+
+	window = int(argv[1])
+#	ftrain = open(argv[2], "r")
+	directory = argv[2]
+	fpair = open(argv[3], "r")
+
+	full = ""
+
+	with os.scandir(directory) as entries:
+		for entry in entries:
+			ftrain = open(entry, "r", encoding="ascii", errors='ignore')
+			full += ftrain.read()
+			full += "\n"
+
+	full = re.sub(r"[^a-zA-Z0-9 ]", "\n", full).lower()
+
+	lfull = full.split("\n")
+
+	pairs = fpair.readlines()
+
+	# Create Vocabulary
+	index = 0
+	totalWords = 0
+	vocab = {}
+
+	for word in full.split():
+		if word not in vocab.keys():
+			vocab.setdefault(word, [index, 1])
+			index += 1
+		else:
+			vocab[word][1] += 1
+		totalWords += 1
+
+	# Initialize Matrix
+	comatrix = numpy.zeros(( len(vocab), len(vocab) ), int)
+
+	# Calculate co-occurence
+	for sentence in lfull:
+		calcco(window, vocab, comatrix, sentence)
+
+	# Output
+	for pair in pairs:
+		print(pair, end="")
+		print("cos: " + str(cosine(vocab, comatrix, pair)))
+		print("pmi: " + str(pmi(vocab, comatrix, pair, totalWords)))
+		try:
+			print("coo: " + str(comatrix[vocab[pair.split()[0]][0]][vocab[pair.split()[1]][0]])
+			print("count: " + str(vocab[pair.split()[0]][1]) + " " + str(vocab[pair.split()[1]][1]))
+		except:
+			print("One or more words were not in the corpus")
+
+		print("")
+
+	ftrain.close()
+	fpair.close()
+
+main(sys.argv)
